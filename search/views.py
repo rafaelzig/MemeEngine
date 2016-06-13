@@ -48,11 +48,11 @@ def get_page_results(results, page):
 
 def get_search_results(query_id, query_postings):
 	# Check previously calculated queries for changes in the corpus
-	query = Query.objects(id=query_id).first()
-	total_frequency = Entry.objects(id__in=query_postings.iterkeys()).sum("total_frequency")
+	query = Query.objects(id=query_id).only("results", "total_frequency").first()
+	total_frequency = Entry.objects(id__in=query_postings.iterkeys()).only("total_frequency").sum("total_frequency")
 	if not query or total_frequency != query.total_frequency:
 		results = []
-		avg_length = Meme.objects.aggregate_average("length")
+		avg_length = Meme.objects.only("length").aggregate_average("length")
 		idf, relevant_docs = get_idf_relevant_docs(query_postings)
 		for meme in relevant_docs:  # Iterate through relevant documents to calculate its score
 			bm25 = calculate_bm25(avg_length, idf, meme, query_postings)
