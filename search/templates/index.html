@@ -27,6 +27,13 @@
     <![endif]-->
 	<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
 	<!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+	<style>
+		img {
+			width: auto;
+			max-width: 100%;
+			height: auto;
+		}
+	</style>
 </head>
 <body>
 	<div class="row">
@@ -54,6 +61,7 @@
 			<div class="panel panel-info">
 				<div class="panel-heading">
 					<h3>{% if result.title %}{{ result.title }} - {% endif %}{{ result.name }}</h3>
+					<h3>{{ result.bm25 }}</h3>
 					<h4>
 						<span class="badge">{{ result.score }}</span>
 						<span class="glyphicon glyphicon-thumbs-up"></span> @
@@ -62,7 +70,7 @@
 				</div>
 				<div class="panel-body">
 					<a href="{{ result.url }}" target="_blank">
-						<img src="{{ result.image }}" class="img-rounded" width="100%" alt="{{ result.caption }}">
+						<img src="{{ result.image }}" class="img-rounded" alt="{{ result.caption }}">
 					</a>
 				</div>
 			</div>

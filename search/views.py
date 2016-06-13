@@ -1,6 +1,6 @@
 from math import log
 
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger, InvalidPage
 from django.shortcuts import render
 
 from forms import SearchForm
@@ -11,7 +11,7 @@ B = 0.75  # Constant for BM25 - usually 0.75
 K1 = 1.5  # Constant for BM25 - between 1.0 to 2.0)
 K3 = 500  # Constant for BM25 - between 0 to 1000)
 PAGE_RANGE = 5
-DOCS_PER_PAGE = 20
+DOCS_PER_PAGE = 21
 
 
 def index(request):
@@ -21,7 +21,7 @@ def index(request):
 		context = {"search_form": search_form}
 		if search_form.is_valid():
 			cleaned_query, query_postings = search_form.get_query_info()
-			context["query"] = cleaned_query
+			context["query"] = query
 			results = get_search_results(cleaned_query, query_postings)
 			context["page_results"], context["page_range"] = get_page_results(results, request.GET.get("page", '1'))
 	else:
@@ -33,8 +33,10 @@ def get_page_results(results, page):
 	paginator = Paginator(results, DOCS_PER_PAGE)
 	try:
 		page_results = paginator.page(page)
-	except(PageNotAnInteger, EmptyPage, InvalidPage):
+	except(PageNotAnInteger, EmptyPage):
 		page_results = paginator.page(1)
+	except InvalidPage:
+		page_results = paginator.page(paginator.num_pages)
 
 	index = page_results.number
 	max_index = len(paginator.page_range)
@@ -53,21 +55,26 @@ def get_search_results(query_id, query_postings):
 		avg_length = Meme.objects.aggregate_average("length")
 		idf, relevant_docs = get_idf_relevant_docs(query_postings)
 		for meme in relevant_docs:  # Iterate through relevant documents to calculate its score
-			bm25 = 0
-			K = (K1 * ((1 - B) + B * (meme.length / avg_length)))
-			for term, query_freq in query_postings.iteritems():
-				doc_freq = meme.postings.get(term)
-				if doc_freq:  # If term exists in the document
-					bm25 += idf[term] * (((K1 + 1) * doc_freq) / (K + doc_freq)) * (
-						((K3 + 1) * query_freq) / (K3 + query_freq))
-					result = SearchResult(id=MemeId(source=meme.id.source, meme_id=meme.id.meme_id),
-										  name=meme.name, title=meme.title, caption=meme.caption,
-										  score=meme.score, url=meme.url, image=meme.image, bm25=bm25)
-					results.append(result)
+			bm25 = calculate_bm25(avg_length, idf, meme, query_postings)
+			result = SearchResult(id=MemeId(source=meme.id.source, meme_id=meme.id.meme_id),
+								  name=meme.name, title=meme.title, caption=meme.caption,
+								  score=meme.score, url=meme.url, image=meme.image, bm25=bm25)
+			results.append(result)
+		results = sorted(results, key=lambda result: result.bm25, reverse=True)[:200]
 		query = Query(id=query_id, results=results, total_frequency=total_frequency)
 		query.save()
-		query = Query.objects(id=query_id).first()
 	return query.results
+
+
+def calculate_bm25(avg_length, idf, meme, query_postings):
+	bm25 = 0
+	K = (K1 * ((1 - B) + B * (meme.length / avg_length)))
+	for term, query_freq in query_postings.iteritems():
+		doc_freq = meme.postings.get(term)
+		if doc_freq:  # If term exists in the document
+			bm25 += idf[term] * (((K1 + 1) * doc_freq) / (K + doc_freq)) * (
+				((K3 + 1) * query_freq) / (K3 + query_freq))
+	return bm25
 
 
 def get_idf_relevant_docs(query_postings):
@@ -81,6 +88,5 @@ def get_idf_relevant_docs(query_postings):
 			term_docs = dict_entry.total_documents
 			relevant_docs.update({repr(meme.id): meme for meme in
 								  Meme.objects(__raw__={"postings." + term: {"$exists": "true"}})})
-		# idf[term] = log((term_docs + L) / (total_docs - term_docs + L), 10)
 		idf[term] = log((total_docs - term_docs + L) / (term_docs + L), 10)
 	return idf, relevant_docs.values()

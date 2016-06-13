@@ -1,7 +1,7 @@
 from __future__ import unicode_literals
 
 from mongoengine import Document, StringField, IntField, FloatField, URLField, EmbeddedDocumentField, EmbeddedDocument, \
-	MapField, LongField, SortedListField
+	MapField, LongField, ListField
 
 
 # Create your models here.
@@ -54,5 +54,5 @@ class Entry(Document):
 class Query(Document):
 	meta = {"collection": "queries", "allow_inheritance": False}
 	id = StringField(required=True, db_field="_id", primary_key=True)
-	results = SortedListField(EmbeddedDocumentField(SearchResult), ordering="bm25", reverse=True)
+	results = ListField(EmbeddedDocumentField(SearchResult), ordering="bm25", reverse=True)
 	total_frequency = LongField(required=True, min_value=0)
